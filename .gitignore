@@ -1,0 +1,7 @@
+/Project/DebugConfig
+/Project/Listings
+/Project/Objects/*
+!/Project/Objects/bootloader.sct
+/Project/.vscode
+/Project/JLinkLog.txt
+/.vscode/
