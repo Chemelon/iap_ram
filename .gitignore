@@ -1,5 +1,8 @@
+/Project/*
 /Project/DebugConfig
 /Project/Listings
+!/Project/bootloader.uvprojx
+!/Project/Objects
 /Project/Objects/*
 !/Project/Objects/bootloader.sct
 /Project/.vscode
