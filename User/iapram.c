@@ -11,7 +11,8 @@
 #include "stm32f10x.h"
 #include "usart.h"
 #define FRAME_DATA_SIZE 255
-#define FRAME_BUFFER_SIZE (1 + 4 + FRAME_DATA_SIZE + 1)
+#define FRAME_BUFFER_SIZE (4 + FRAME_DATA_SIZE + 1 + 1)
+#define FRAME_BUFFER_CNT 4
 
 #define DATA_RESLOVED 0 // 缓冲区中数据已经被处理
 #define DATA_RECEIVED 1 // 缓冲区已接受数据待处理
@@ -27,6 +28,7 @@ typedef struct protocol_struct
     unsigned char frame_seq;                   // 帧序列 由主机决定 从机返回相同序列
     unsigned char data_len;                    // 帧数据长度
     unsigned char frame_data[FRAME_DATA_SIZE]; // 帧数据
+    /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
     unsigned char verify_sum;                  // 帧校验和(求和校验)
     unsigned char frame_status;                // 帧状态(非协议必须,定义此数据为了方便程序编写)
 } protocol_type;
@@ -34,9 +36,46 @@ typedef struct protocol_struct
 /* 数据缓冲区 */
 static volatile unsigned char frame1[FRAME_BUFFER_SIZE] = {0};
 static volatile unsigned char frame2[FRAME_BUFFER_SIZE] = {0};
+static volatile unsigned char frame3[FRAME_BUFFER_SIZE] = {0};
+static volatile unsigned char frame4[FRAME_BUFFER_SIZE] = {0};
+
+static volatile unsigned char *frame_list[FRAME_BUFFER_CNT] = {
+    frame1,
+    frame2,
+    frame3,
+    frame4,
+};
+
 /* 用于管理缓冲区的指针 */
-volatile unsigned char *frame_rxinuse = frame1;
-volatile unsigned char *frame_rxcpld = frame2;
+static volatile unsigned char frame_rxinuse = 0;
+static volatile unsigned char frame_rxcpld = 0;
+
+void USART1_IRQHandler(void)
+{
+    /* IDLE中断 */
+    if (USART1->SR & USART_SR_IDLE)
+    {
+        /* 清除IDLE位 */
+        USART1->SR;
+        USART1->DR;
+        /* 关闭DMA */
+        DMA1_Channel5->CCR &= ~DMA_CCR5_EN;
+
+        //Usart_SendString(DEBUG_USARTx, "idle event detected\r\n");
+
+        /* 通知更新 */
+        ((protocol_type *)(frame_list[frame_rxinuse]))->frame_status = DATA_RECEIVED;
+        /* 切换frame 使 rxcpld 指向已经接收到数据的缓冲区 */
+        frame_rxcpld = frame_rxinuse;
+        frame_rxinuse = (frame_rxinuse + 1) % FRAME_BUFFER_CNT;
+        /* 最大传输 FRAME_BUFFER_SIZE */
+        DMA1_Channel5->CNDTR = FRAME_BUFFER_SIZE;
+        DMA1_Channel5->CMAR = (unsigned int)&frame_list[frame_rxinuse][0];
+
+        /* 开启DMA */
+        DMA1_Channel5->CCR |= DMA_CCR5_EN;
+    }
+}
 
 /**
  * @brief 求和校验
@@ -90,7 +129,7 @@ static void IR_usart_init(unsigned char apbclock_Mhz, unsigned int baudrate)
  * @brief 初始化USART的DMA接收功能
  *
  */
-void IR_usart_rxdma_init(void)
+static void IR_usart_rxdma_init(void)
 {
     /* 关闭USART1 */
     USART1->CR1 &= ~USART_CR1_UE;
@@ -102,7 +141,7 @@ void IR_usart_rxdma_init(void)
     /* 最大传输 FRAME_BUFFER_SIZE */
     DMA1_Channel5->CNDTR = FRAME_BUFFER_SIZE;
     DMA1_Channel5->CPAR = (unsigned int)&(USART1->DR);
-    DMA1_Channel5->CMAR = (unsigned int)&frame_rxinuse[0];
+    DMA1_Channel5->CMAR = (unsigned int)&frame_list[frame_rxinuse][0];
     /* 开启DMA */
     DMA1_Channel5->CCR |= DMA_CCR5_EN;
 
@@ -121,7 +160,7 @@ void IR_usart_rxdma_init(void)
  * @brief 初始化USART的DMA发送功能
  *
  */
-void IR_usart_txdma_init(void)
+static void IR_usart_txdma_init(void)
 {
     /* 关闭USART1 */
     USART1->CR1 &= ~USART_CR1_UE;
@@ -133,7 +172,7 @@ void IR_usart_txdma_init(void)
     /* 最大传输 FRAME_BUFFER_SIZE */
     DMA1_Channel4->CNDTR = 0;
     DMA1_Channel4->CPAR = (unsigned int)&(USART1->DR);
-    DMA1_Channel4->CMAR = (unsigned int)&frame_rxcpld[0];
+    DMA1_Channel4->CMAR = (unsigned int)&frame_list[frame_rxcpld][0];
     /* 开启DMA */
     DMA1_Channel4->CCR |= DMA_CCR4_EN;
 
@@ -152,7 +191,7 @@ void IR_usart_txdma_init(void)
  * @param buffer_addr 缓冲区地址
  * @param len 待发送数据长度
  */
-void IR_usart_dmatx(void *buffer_addr, unsigned short len)
+static void IR_usart_dmatx(void *buffer_addr, unsigned short len)
 {
     /* 关闭通道4 */
     DMA1_Channel4->CCR &= ~DMA_CCR4_EN;
@@ -168,7 +207,7 @@ void IR_usart_dmatx(void *buffer_addr, unsigned short len)
  * @brief 初始化usart的中断配置
  *
  */
-void IR_usart_nvic_init(void)
+static void IR_usart_nvic_init(void)
 {
     /* 寄存器版暂时跑不通 待修改 */
 #if 0
@@ -204,39 +243,6 @@ void IR_usart_nvic_init(void)
 #endif
 }
 
-void USART1_IRQHandler(void)
-{
-    /* IDLE中断 */
-    // Usart_SendString(DEBUG_USARTx, "enter usart irq\r\n");
-    if (USART1->SR & USART_SR_IDLE)
-    {
-        /* 通知更新 */
-        ((protocol_type *)frame_rxinuse)->frame_status = DATA_RECEIVED;
-        /* 切换frame rxcpld 指向已经接收到数据的缓冲区 */
-        if (frame_rxinuse == frame1)
-        {
-            frame_rxinuse = frame2;
-            frame_rxcpld = frame1;
-        }
-        else
-        {
-            frame_rxinuse = frame1;
-            frame_rxcpld = frame2;
-        }
-
-        /* 关闭DMA */
-        DMA1_Channel5->CCR &= ~DMA_CCR5_EN;
-        /* 最大传输 FRAME_BUFFER_SIZE */
-        DMA1_Channel5->CNDTR = FRAME_BUFFER_SIZE;
-        DMA1_Channel5->CMAR = (unsigned int)&frame_rxinuse[0];
-        /* 开启DMA */
-        DMA1_Channel5->CCR |= DMA_CCR5_EN;
-        /* 清除IDLE位 */
-        USART1->SR;
-        USART1->DR;
-    }
-}
-
 /**
  * @brief 分析数据帧的各个字段并执行相关功能
  *
@@ -244,23 +250,33 @@ void USART1_IRQHandler(void)
 static void IR_frame_analysis(void)
 {
     protocol_type *tempframe = NULL;
-    if (((protocol_type *)frame_rxcpld)->frame_status == DATA_RECEIVED)
+    for (;;)
     {
-        Usart_SendString(DEBUG_USARTx, "frame detected\r\n");
-        tempframe = (protocol_type *)frame_rxcpld;
-        /* 取得校验和 */
-        tempframe->verify_sum = ((unsigned char *)tempframe)[4 + tempframe->data_len];
-        /* 校验和是否匹配 */
-        if (IR_verify_sum((unsigned char *)tempframe, 4 + tempframe->data_len + 1))
+        if (((protocol_type *)frame_list[frame_rxcpld])->frame_status == DATA_RECEIVED)
         {
-            Usart_SendString(DEBUG_USARTx, "verify error\r\n");
+            Usart_SendByte(DEBUG_USARTx, 0x30 + frame_rxcpld);
+            //Usart_SendString(DEBUG_USARTx, "frame detected\r\n");
+            tempframe = (protocol_type *)frame_list[frame_rxcpld];
+            /* 取得校验和 */
+            tempframe->verify_sum = ((unsigned char *)tempframe)[4 + tempframe->data_len];
+            /* 校验和是否匹配 */
+            if (IR_verify_sum((unsigned char *)tempframe, 4 + tempframe->data_len + 1))
+            {
+                Usart_SendString(DEBUG_USARTx, "verify error\r\n");
+            }
+            else
+            {
+                /* 组织并填充待发送数据 */
+                tempframe->data_len = 0;
+                /* 将校验位置零 */
+                ((unsigned char *)tempframe)[4] = 0;
+                /* 计算校验值并填充 */
+                ((unsigned char *)tempframe)[4] = IR_verify_sum((unsigned char *)tempframe,4+1);
+                IR_usart_dmatx(tempframe, 4 + 1);
+                // Usart_SendArray(DEBUG_USARTx, (unsigned char *)tempframe, 4 + tempframe->data_len + 1);
+            }
+            tempframe->frame_status = DATA_RESLOVED;
         }
-        else
-        {
-            IR_usart_dmatx(tempframe, 4 + tempframe->data_len + 1);
-            Usart_SendArray(DEBUG_USARTx, (unsigned char *)tempframe, 4 + tempframe->data_len + 1);
-        }
-        tempframe->frame_status = DATA_RESLOVED;
     }
 }
 
@@ -274,19 +290,14 @@ void iap_ram_app(void)
 
     IR_usart_init(72, 115200);
     Usart_SendString(DEBUG_USARTx, "running in the ram app baud 115200\r\n");
-    Usart_SendString(DEBUG_USARTx, NULL);
 
     IR_usart_nvic_init();
     IR_usart_rxdma_init();
     IR_usart_txdma_init();
-    
-    for (;;)
-    {
-        IR_frame_analysis();
-    }
+    IR_frame_analysis();
 }
 
-void fault_test_by_unalign(void)
+static void fault_test_by_unalign(void)
 {
     volatile int *SCB_CCR = (volatile int *)0xE000ED14; // SCB->CCR
     volatile int *p;
@@ -307,7 +318,7 @@ void fault_test_by_unalign(void)
     printf("addr:0x%02X value:0x%08X\r\n", (int)p, value);
 }
 
-void fault_test_by_div0(void)
+static void fault_test_by_div0(void)
 {
     volatile int *SCB_CCR = (volatile int *)0xE000ED14; // SCB->CCR
     int x, y, z;

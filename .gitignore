@@ -1,10 +1,8 @@
+/.vscode
+
 /Project/*
-/Project/DebugConfig
-/Project/Listings
-!/Project/bootloader.uvprojx
 !/Project/Objects
 /Project/Objects/*
-!/Project/Objects/bootloader.sct
-/Project/.vscode
-/Project/JLinkLog.txt
-/.vscode/
+!/Project/Objects/*.sct
+
+!/Project/*.uvprojx
