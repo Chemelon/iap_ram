@@ -13,6 +13,93 @@
 #include "bridge.h"
 extern void iap_ram_app(void);
 
+/* hardfalt 用于 cmbacktrace */
+extern void HardFault_Handler(void);
+extern void USART1_IRQHandler(void);
+void undefined_handler(void)
+{
+    for (;;)
+    {
+    }
+}
+/* 中断向量表 */
+static const void* const VectorTable[] = {
+    0,
+    0,
+    undefined_handler,
+    HardFault_Handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    0,
+    0,
+    0,
+    0,
+    undefined_handler,
+    undefined_handler,
+    0,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    USART1_IRQHandler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+    undefined_handler,
+};
+
+void copy_vector_toram(void)
+{
+    /* 运行地址 */
+    extern unsigned char Image$$ER_VECTOR$$Base;
+    /* 大小 */
+    unsigned char * src = (unsigned char *)&VectorTable[0];
+    unsigned char * dest = &Image$$ER_VECTOR$$Base;
+    unsigned int count = 59 * 4;
+    for(;count > 0 ;count--)
+    {
+        *dest++ = *src++;
+    }
+
+}
+
 void reset_allperipheral(void)
 {
     GPIO_DeInit(GPIOA);

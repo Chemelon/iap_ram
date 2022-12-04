@@ -3,6 +3,7 @@
 #include "stm32f10x.h"
 
 void copy_iapcode_toram(void);
+void copy_vector_toram(void);
 void jump_iap_ram(void);
 void reset_allperipheral(void);
 

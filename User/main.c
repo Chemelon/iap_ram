@@ -22,11 +22,20 @@ int main(void)
     /* 嵌套向量中断控制器组选择 */
     NVIC_SetPriorityGrouping(NVIC_PriorityGroup_4);
     USART_Config();
+    
+    Usart_SendString(DEBUG_USARTx, __DATE__);
+    Usart_SendString(DEBUG_USARTx, "\r\n");
+    Usart_SendString(DEBUG_USARTx, __TIME__);
+    Usart_SendString(DEBUG_USARTx, "\r\n");
     Usart_SendString(DEBUG_USARTx, "now in the main app baud 115200\r\n");
+    
+    copy_vector_toram();
     /* 拷贝函数到RAM */
     copy_iapcode_toram();
     /* 复位所有外设 */
     reset_allperipheral();
+    /* 设置向量表地址 */
+    NVIC_SetVectorTable(NVIC_VectTab_RAM,0);
     /* 跳转到ram */
     iap_ram_app();
     for (;;)
