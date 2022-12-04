@@ -60,29 +60,31 @@ typedef struct protocol_struct
     IR_uint8_t data_len;                    // 帧数据长度
     IR_uint8_t frame_data[FRAME_DATA_SIZE]; // 帧数据
     /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
-    IR_uint8_t verify_sum;   // 帧校验和(求和校验)
-    IR_uint8_t frame_status; // 帧状态(非协议必须,定义此数据为了方便程序编写)
+    IR_uint8_t verify_sum;            // 帧校验和(求和校验)
+    volatile IR_uint8_t frame_status; // 帧状态(非协议必须,定义此数据为了方便程序编写)
 } protocol_type;
 
 /* 数据缓冲区 */
-static volatile IR_uint8_t frame1[FRAME_BUFFER_SIZE] = {0};
-static volatile IR_uint8_t frame2[FRAME_BUFFER_SIZE] = {0};
-static volatile IR_uint8_t frame3[FRAME_BUFFER_SIZE] = {0};
-static volatile IR_uint8_t frame4[FRAME_BUFFER_SIZE] = {0};
+static IR_uint8_t frame1[FRAME_BUFFER_SIZE] = {0};
+static IR_uint8_t frame2[FRAME_BUFFER_SIZE] = {0};
+static IR_uint8_t frame3[FRAME_BUFFER_SIZE] = {0};
+static IR_uint8_t frame4[FRAME_BUFFER_SIZE] = {0};
 
 /* 指向所有缓冲区的指针数组 */
-static volatile IR_uint8_t *frame_list[FRAME_BUFFER_CNT] = {
+static IR_uint8_t *frame_list[FRAME_BUFFER_CNT] = {
     frame1,
     frame2,
     frame3,
     frame4,
 };
 
+
 /* 用于管理缓冲区指针的索引值 */
 static volatile IR_uint8_t frame_rxinuse = 0;
 static volatile IR_uint8_t frame_rxcpld = 0;
 
 void IR_flash_writebuffer(IR_uint32_t addr, IR_uint8_t *pdata);
+void IR_memcopy(IR_uint8_t *src, IR_uint8_t *dest, IR_uint32_t len);
 void *function_list[] = {
     IR_flash_writebuffer,
 };
@@ -110,7 +112,7 @@ void USART1_IRQHandler(void)
         DMA1_Channel5->CMAR = (IR_uint32_t)&frame_list[frame_rxinuse][0];
 
         /* 开启DMA */
-        DMA1_Channel5->CCR |= DMA_CCR5_EN;
+        // DMA1_Channel5->CCR |= DMA_CCR5_EN;
     }
 }
 
@@ -286,6 +288,7 @@ static void IR_usart_nvic_init(void)
  */
 static void IR_frame_analysis(void)
 {
+    IR_uint32_t i = 0, write_addr = FLASH_BASE;
     protocol_type *tempframe = NULL;
     for (;;)
     {
@@ -294,47 +297,52 @@ static void IR_frame_analysis(void)
             // Usart_SendByte(DEBUG_USARTx, 0x30 + frame_rxcpld);
             /* 取得缓冲区指针 */
             tempframe = (protocol_type *)frame_list[frame_rxcpld];
+
+            // Usart_SendByte(DEBUG_USARTx, tempframe->data_len);
             /* 取得校验和 */
             tempframe->verify_sum = ((IR_uint8_t *)tempframe)[4 + tempframe->data_len];
-            Usart_SendArray(DEBUG_USARTx, tempframe->frame_data, tempframe->data_len);
+            // Usart_SendArray(DEBUG_USARTx, tempframe->frame_data, tempframe->data_len);
             /* 校验和是否匹配 */
             if (!IR_verify_sum((IR_uint8_t *)tempframe, 4 + tempframe->data_len + 1))
             {
+                IR_memcopy(tempframe->frame_data, &flashwrite_buffer[i], tempframe->data_len);
+
+                i += tempframe->data_len;
+                /* 文件结尾会发送一个长度为零的数据帧 */
+                if (i == FLASH_PAGE_SIZE || tempframe->data_len == 0)
+                {
+                    IR_flash_writebuffer(write_addr, &flashwrite_buffer[0]);
+                    // Usart_SendString(DEBUG_USARTx,"update\r\n");
+                    // Usart_SendArray(DEBUG_USARTx,&flashwrite_buffer[0],i);
+                    i = 0;
+                    write_addr += FLASH_PAGE_SIZE;
+                    if (tempframe->data_len == 0)
+                    {
+                        write_addr = FLASH_BASE;
+                    }
+                }
                 /* 组织并填充待发送数据 */
                 tempframe->data_len = 0;
                 /* 将校验位置零 */
                 ((IR_uint8_t *)tempframe)[4] = 0;
                 /* 计算校验值并填充 */
                 ((IR_uint8_t *)tempframe)[4] = IR_verify_sum((IR_uint8_t *)tempframe, 4 + 1);
-                /* 发送数据 */
+                /* 发送回复帧 */
                 IR_usart_dmatx(tempframe, 4 + 1);
+                /* 清除标记 */
+                tempframe->frame_status = DATA_RESLOVED;
+                /* 开启接收DMA */
+                DMA1_Channel5->CCR |= DMA_CCR5_EN;
             }
             else
             {
                 Usart_SendString(DEBUG_USARTx, "verify error\r\n");
             }
-            tempframe->frame_status = DATA_RESLOVED;
         }
     }
 }
 
-/**
- * @brief 主函数
- *
- */
-void iap_ram_app(void)
-{
-    volatile int x = 10, y = 0, z = 0;
-
-    IR_usart_init(72, 115200);
-    Usart_SendString(DEBUG_USARTx, "running in the ram app baud 115200\r\n");
-
-    IR_usart_nvic_init();
-    IR_usart_rxdma_init();
-    IR_usart_txdma_init();
-    IR_frame_analysis();
-}
-
+//#define CM_BACKTRACE_TEST
 #ifdef CM_BACKTRACE_TEST
 static void fault_test_by_unalign(void)
 {
@@ -370,6 +378,22 @@ static void fault_test_by_div0(void)
     printf("z:%d\n", z);
 }
 #endif
+
+/**
+ * @brief 主函数
+ *
+ */
+void iap_ram_app(void)
+{
+    IR_usart_init(72, 115200);
+    Usart_SendString(DEBUG_USARTx, "running in the ram app baud 115200\r\n");
+
+    IR_usart_nvic_init();
+    IR_usart_rxdma_init();
+    IR_usart_txdma_init();
+    // fault_test_by_unalign();
+    IR_frame_analysis();
+}
 
 void IR_flash_erase(IR_uint32_t Page_Address)
 {
@@ -477,7 +501,7 @@ void IR_flash_writepage(IR_uint8_t page, IR_uint8_t *pdata, IR_uint16_t offset)
     /* 写入 */
     for (int i = 0; i < write_cnt;)
     {
-        IR_flash_writehalfword(page_addr, flashread_buffer[i] << 8 | flashread_buffer[i + 1]);
+        IR_flash_writehalfword(page_addr, flashread_buffer[i + 1] << 8 | flashread_buffer[i]);
         page_addr += 2;
         i += 2;
     }
@@ -486,7 +510,7 @@ void IR_flash_writepage(IR_uint8_t page, IR_uint8_t *pdata, IR_uint16_t offset)
 
 void IR_flash_writebuffer(IR_uint32_t addr, IR_uint8_t *pdata)
 {
-    IR_uint8_t page = addr / FLASH_PAGE_SIZE;
+    IR_uint8_t page = (addr / FLASH_PAGE_SIZE) - 0x20000;
     IR_uint16_t residue = addr % FLASH_PAGE_SIZE;
 
     /* 解锁 */

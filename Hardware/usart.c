@@ -106,12 +106,10 @@ inline void Usart_SendByte(USART_TypeDef *pUSARTx, uint8_t ch)
 /****************** 发送8位的数组 ************************/
 void Usart_SendArray(USART_TypeDef *pUSARTx, uint8_t *array, uint16_t num)
 {
-    uint8_t i;
-
-    for (i = 0; i < num; i++)
+    for (; num > 0; num--)
     {
         /* 发送一个字节数据到USART */
-        Usart_SendByte(pUSARTx, array[i]);
+        Usart_SendByte(pUSARTx, *array++);
 
     }
     /* 等待发送完成 */
