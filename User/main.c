@@ -29,6 +29,7 @@ int main(void)
     Usart_SendString(DEBUG_USARTx, "\r\n");
     Usart_SendString(DEBUG_USARTx, "now in the main app baud 115200\r\n");
     
+    /* 拷贝中断向量表到ram */
     copy_vector_toram();
     /* 拷贝函数到RAM */
     copy_iapcode_toram();
