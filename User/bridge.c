@@ -22,7 +22,7 @@ void undefined_handler(void)
     {
     }
 }
-/* 中断向量表 */
+/* 要拷贝到ram中的中断向量表 */
 static const void* const VectorTable[] = {
     0,
     0,
@@ -87,13 +87,10 @@ static const void* const VectorTable[] = {
 
 void copy_vector_toram(void)
 {
-    /* 运行地址 */
-    extern unsigned char Image$$ER_VECTOR$$Base;
-
     unsigned char * src = (unsigned char *)&VectorTable[0];
-    unsigned char * dest = &Image$$ER_VECTOR$$Base;
+    unsigned char * dest = (unsigned char *)SRAM_BASE;
     /* 大小 */
-    unsigned int count = 59 * 4;
+    unsigned int count = sizeof(VectorTable) * sizeof(void *);
     for(;count > 0 ;count--)
     {
         *dest++ = *src++;

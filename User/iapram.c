@@ -59,7 +59,8 @@ typedef struct protocol_struct
     IR_uint8_t frame_seq;                   // 帧序列 由主机决定 从机返回相同序列
     IR_uint8_t data_len;                    // 帧数据长度
     IR_uint8_t frame_data[FRAME_DATA_SIZE]; // 帧数据
-    /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
+    /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字
+    ///         节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
     IR_uint8_t verify_sum;            // 帧校验和(求和校验)
     volatile IR_uint8_t frame_status; // 帧状态(非协议必须,定义此数据为了方便程序编写)
 } protocol_type;

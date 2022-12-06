@@ -14,6 +14,7 @@
 #include "cm_backtrace.h"
 #include <stdio.h>
 
+
 extern void iap_ram_app(void);
 int main(void)
 {
@@ -29,14 +30,14 @@ int main(void)
     Usart_SendString(DEBUG_USARTx, "\r\n");
     Usart_SendString(DEBUG_USARTx, "now in the main app baud 115200\r\n");
     
-    /* 拷贝中断向量表到ram */
-    copy_vector_toram();
-    /* 拷贝函数到RAM */
-    copy_iapcode_toram();
     /* 复位所有外设 */
     reset_allperipheral();
     /* 设置向量表地址 */
     NVIC_SetVectorTable(NVIC_VectTab_RAM,0);
+    /* 拷贝中断向量表到ram */
+    copy_vector_toram();
+    /* 拷贝函数到RAM */
+    copy_iapcode_toram();
     /* 跳转到ram */
     iap_ram_app();
     for (;;)
