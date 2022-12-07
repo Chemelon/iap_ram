@@ -59,7 +59,8 @@ typedef struct protocol_struct
     IR_uint8_t frame_seq;                   // 帧序列 由主机决定 从机返回相同序列
     IR_uint8_t data_len;                    // 帧数据长度
     IR_uint8_t frame_data[FRAME_DATA_SIZE]; // 帧数据
-    /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
+    /// @brief bug(solved): 将缓冲区转换为 protocol_type 类型访问时 verify_sum 应该储存在缓冲区的倒数第二个位置,之前少一个字
+    ///         节,所以现在FRAME_BUFFER_SIZE = (4 + FRAME_DATA_SIZE + 1 + 1)
     IR_uint8_t verify_sum;            // 帧校验和(求和校验)
     volatile IR_uint8_t frame_status; // 帧状态(非协议必须,定义此数据为了方便程序编写)
 } protocol_type;
@@ -89,7 +90,7 @@ void *function_list[] = {
     IR_flash_writebuffer,
 };
 
-void USART1_IRQHandler(void)
+void IR_USART1_IRQHandler(void)
 {
     /* IDLE中断 */
     if (USART1->SR & USART_SR_IDLE)
@@ -341,43 +342,6 @@ static void IR_frame_analysis(void)
         }
     }
 }
-
-//#define CM_BACKTRACE_TEST
-#ifdef CM_BACKTRACE_TEST
-static void fault_test_by_unalign(void)
-{
-    volatile int *SCB_CCR = (volatile int *)0xE000ED14; // SCB->CCR
-    volatile int *p;
-    volatile int value;
-
-    *SCB_CCR |= (1 << 3); /* bit3: UNALIGN_TRP. */
-
-    p = (int *)0x00;
-    value = *p;
-    printf("addr:0x%02X value:0x%08X\r\n", (int)p, value);
-
-    p = (int *)0x04;
-    value = *p;
-    printf("addr:0x%02X value:0x%08X\r\n", (int)p, value);
-
-    p = (int *)0x03;
-    value = *p;
-    printf("addr:0x%02X value:0x%08X\r\n", (int)p, value);
-}
-
-static void fault_test_by_div0(void)
-{
-    volatile int *SCB_CCR = (volatile int *)0xE000ED14; // SCB->CCR
-    int x, y, z;
-
-    *SCB_CCR |= (1 << 4); /* bit4: DIV_0_TRP. */
-
-    x = 10;
-    y = 0;
-    z = x / y;
-    printf("z:%d\n", z);
-}
-#endif
 
 /**
  * @brief 主函数
