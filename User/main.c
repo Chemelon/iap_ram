@@ -68,7 +68,7 @@ int main(void)
     Usart_SendString(DEBUG_USARTx, "\r\n");
     Usart_SendString(DEBUG_USARTx, __TIME__);
     Usart_SendString(DEBUG_USARTx, "\r\n");
-    Usart_SendString(DEBUG_USARTx, "now in the main app baud 115200\r\n");
+    Usart_SendString(DEBUG_USARTx, "main , baud 115200\r\n");
 
     /**
      * @brief 按以下步骤初始化运行环境

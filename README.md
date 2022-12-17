@@ -1,8 +1,7 @@
 # 以函数库的形式提供IAP更新功能
 
 ## 简介:
-本工程通过散列加载文件指定链接地址,并拷贝相关代码到ram中运行,实现通过串口1更新内部flash数据的功能,协议帧格式参考正点原子[XCOM](https://amobbs.com/thread-5703833-1-1.html)    
-串口助手
+本工程通过散列加载文件指定链接地址,并拷贝相关代码到ram中运行,实现通过串口1更新内部flash数据的功能,协议帧格式参考正点原子[XCOM](https://amobbs.com/thread-5703833-1-1.html)串口助手
 
 ## 编写原因:
 经典IAP的实现方式是创建两个独立的工程,并且将内部flash分区存放IAP程序和APP程序,上电后通过IAP程序加载APP.此工程以函数调用的方式提
@@ -17,7 +16,7 @@
 - 默认下载到flash起始地址,即`0x08000000`
 ## 其他:
 此工程编写于STM32F103C8T6其他型号需要修改启动文件以及`VectorTable[]`数组以及和内存、FLASH大小相关的宏定义,其他单片机需要重新实
-现`iapram.c`中的收发函数以及`bridge.c`中的大部分函数 
+现`iapram.c`中的收发函数以及`bridge.c`中的大部分函数  
 目前资源开销: 1536 bytes rom  0 byte ram(use 4652 bytes ram after being loaded into ram)
 
 ## 开发日记
@@ -29,6 +28,7 @@
 
  - 20221207 取消了sct文件中ER_VECTOR并且指定RW ZI 段的OVERLAY属性减少内存开销 
    - TODO:  
+      目前进入ramapp后cmbacktrace就无法正常工作了
       抽象收发函数等为接口函数的形式方便移植  
       创建函数列表实现更新部分flash以及通过串口调用内部函数   
       编写上位机  

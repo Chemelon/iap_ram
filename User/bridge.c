@@ -23,7 +23,7 @@ void undefined_handler(void)
     }
 }
 /* 要拷贝到ram中的中断向量表 */
-static const void *const VectorTable[] = {
+static void *const VectorTable[] = {
     0,
     0,
     undefined_handler,
@@ -109,6 +109,7 @@ void ZI_and_RW_init()
     {
         *pdest++ = *psrc++;
     }
+    /* 此时pstack指向ZI段的起始位置 */
     len = pstack - (unsigned int)pdest;
     /* 初始化ZI */
     for (; len > 0; len--)
