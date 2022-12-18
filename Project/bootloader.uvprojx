@@ -548,6 +548,11 @@
               <FileType>5</FileType>
               <FilePath>.\Objects\bootloader.sct</FilePath>
             </File>
+            <File>
+              <FileName>dependedfunc.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\User\dependedfunc.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

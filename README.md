@@ -28,7 +28,7 @@
 
  - 20221207 取消了sct文件中ER_VECTOR并且指定RW ZI 段的OVERLAY属性减少内存开销 
    - TODO:  
-      目前进入ramapp后cmbacktrace就无法正常工作了
+      目前进入ramapp后cmbacktrace就无法正常工作了   
       抽象收发函数等为接口函数的形式方便移植  
       创建函数列表实现更新部分flash以及通过串口调用内部函数   
       编写上位机  

@@ -10,7 +10,12 @@
  */
 #include "stm32f10x.h"
 #include "iapram.h"
-#include "usart.h"
+#include <stdio.h>
+
+/* DEBUG 用 */
+#define DEBUG_USARTx USART3
+extern void Usart_SendString(USART_TypeDef *pUSARTx, char *str);
+/* DEBUG 用 */
 
 static IR_uint8_t flashwrite_buffer[FLASH_PAGE_SIZE] = {0};
 static IR_uint8_t flashread_buffer[FLASH_PAGE_SIZE] = {0};
@@ -50,13 +55,9 @@ static IR_uint8_t *frame_list[FRAME_BUFFER_CNT] = {
 static volatile IR_uint8_t frame_rxinuse = 0;
 static volatile IR_uint8_t frame_rxcpld = 0;
 
-static void IR_flash_writebuffer(IR_uint32_t addr, IR_uint8_t *pdata);
+#include "dependentfunc.h"
 static void IR_frame_rx(void);
 void IR_memcopy(IR_uint8_t *src, IR_uint8_t *dest, IR_uint32_t len);
-
-void *function_list[] = {
-    IR_flash_writebuffer,
-};
 
 void IR_USART1_IRQHandler(void)
 {
@@ -81,7 +82,7 @@ void IR_USART1_IRQHandler(void)
 }
 
 /**
- * @brief
+ * @brief 内存拷贝
  *
  * @param src
  * @param dest
@@ -274,13 +275,22 @@ static void IR_usart_nvic_init(void)
 #endif
 }
 
+/**
+ * @brief 组织发送帧并发送数据
+ *
+ * @param frame_buffer 帧内存
+ * @param pdata 待发送数据
+ * @param len 数据长度
+ * @param func 帧功能
+ * @param seq 帧序列
+ */
 static void IR_frame_tx(protocol_type *frame_buffer, IR_uint8_t *pdata, IR_uint16_t len, IR_uint8_t func, IR_uint8_t seq)
 {
     if (len != 0)
     {
         IR_memcopy(pdata, frame_buffer->frame_data, len);
     }
-    frame_buffer->device_addr = 0;
+    frame_buffer->device_addr = DEVICE_ADDR;
     frame_buffer->frame_func = func;
     frame_buffer->frame_seq = seq;
     frame_buffer->data_len = len;
@@ -311,7 +321,7 @@ static void IR_frame_analysis(void)
         /* 校验和是否匹配 */
         if (IR_verify_sum((IR_uint8_t *)tempframe, 4 + tempframe->data_len + 1))
         {
-            Usart_SendString(DEBUG_USARTx, "verify error\r\n");
+            // Usart_SendString(DEBUG_USARTx, "verify error\r\n");
             continue;
         }
         /* 清除标记 */
@@ -333,9 +343,10 @@ static void IR_frame_analysis(void)
             /* 所有包已收到 重置地址 */
             write_addr = FLASH_BASE;
         }
+        /* 发送回复帧 */
         IR_frame_tx(tempframe, NULL, 0, tempframe->frame_func, tempframe->frame_seq);
 
-        /* 开启接收DMA */
+        /* 开启接收DMA接收下一帧 */
         DMA1_Channel5->CCR |= DMA_CCR5_EN;
     }
 }
@@ -395,7 +406,10 @@ static void IR_flash_erase(IR_uint32_t Page_Address)
     FLASH->CR &= CR_PER_Reset;
     return;
 error:
-    Usart_SendString(DEBUG_USARTx, "erase error\r\n");
+    // Usart_SendString(DEBUG_USARTx, "erase error\r\n");
+    /* Disable the PER Bit */
+    FLASH->CR &= CR_PER_Reset;
+    return;
 }
 
 static void IR_flash_writehalfword(IR_uint32_t addr, IR_uint16_t data)
@@ -417,12 +431,14 @@ static void IR_flash_writehalfword(IR_uint32_t addr, IR_uint16_t data)
             goto error;
         }
     }
+
     /* if the previous operation is completed, proceed to program the new data */
     FLASH->CR |= CR_PG_Set;
+
     /* 写入 */
     *(__IO uint16_t *)addr = data;
-    /* Wait for last operation to be completed */
 
+    /* Wait for last operation to be completed */
     Timeout = 0x00002000;
     while ((FLASH->SR & FLASH_FLAG_BANK1_BSY))
     {
@@ -432,15 +448,29 @@ static void IR_flash_writehalfword(IR_uint32_t addr, IR_uint16_t data)
             goto error;
         }
     }
+    /* 校验 */
+    if (*(__IO uint16_t *)addr != data)
+    {
+        goto error;
+    }
     /* Disable the PG Bit */
     FLASH->CR &= CR_PG_Reset;
     return;
 
 error:
-    Usart_SendString(DEBUG_USARTx, "program error\r\n");
+    /* Disable the PG Bit */
+    FLASH->CR &= CR_PG_Reset;
+    //Usart_SendString(DEBUG_USARTx, "program error\r\n");
     return;
 }
 
+/**
+ * @brief 以页位索引写入数据
+ *
+ * @param page 要写入的页号(eg:0,1,2,3...)
+ * @param pdata 指向要写入的数据
+ * @param offset 页内偏移
+ */
 static void IR_flash_writepage(IR_uint8_t page, IR_uint8_t *pdata, IR_uint16_t offset)
 {
     IR_uint32_t page_addr = FLASH_BASE + (page * FLASH_PAGE_SIZE);
@@ -459,13 +489,21 @@ static void IR_flash_writepage(IR_uint8_t page, IR_uint8_t *pdata, IR_uint16_t o
     /* 改写 */
     IR_memcopy(pdata, &flashread_buffer[offset], write_cnt);
     /* 写入 */
+#ifdef FALSH_USE_FUNCTIONCALL
     for (int i = 0; i < write_cnt;)
     {
+#ifdef LITTLE_ENDIAN
         IR_flash_writehalfword(page_addr, flashread_buffer[i + 1] << 8 | flashread_buffer[i]);
+#else
+        IR_flash_writehalfword(page_addr, flashread_buffer[i] << 8 | flashread_buffer[i + 1]);
+#endif
         page_addr += 2;
         i += 2;
     }
-    /* 这里缺少一个校验环节 */
+#else
+    {
+    }
+#endif
 }
 
 /**
@@ -492,4 +530,11 @@ static void IR_flash_writebuffer(IR_uint32_t addr, IR_uint8_t *pdata)
     }
     /* 上锁 */
     FLASH->CR |= CR_LOCK_Set;
+}
+
+void IR_undefined_handler(void)
+{
+    for (;;)
+    {
+    }
 }

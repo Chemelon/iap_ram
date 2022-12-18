@@ -1,6 +1,9 @@
 #ifndef __IAPRAM_H
 #define __IAPRAM_H
 
+#define LITTLE_ENDIAN
+#define FALSH_USE_FUNCTIONCALL
+
 typedef unsigned int IR_uint32_t;
 typedef unsigned short IR_uint16_t;
 typedef unsigned char IR_uint8_t;
@@ -29,6 +32,8 @@ typedef unsigned char IR_uint8_t;
 #else
 #define FLASH_PAGE_SIZE ((uint16_t)0x400) // 1024
 #endif
+
+#define DEVICE_ADDR ((IR_uint8_t)0x01)
 
 #define FRAME_DATA_SIZE 255
 #define FRAME_BUFFER_SIZE (4 + FRAME_DATA_SIZE + 1 + 1)
