@@ -549,9 +549,9 @@
               <FilePath>.\Objects\bootloader.sct</FilePath>
             </File>
             <File>
-              <FileName>dependedfunc.h</FileName>
+              <FileName>dependentfunc.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\User\dependedfunc.h</FilePath>
+              <FilePath>..\User\dependentfunc.h</FilePath>
             </File>
           </Files>
         </Group>
